@@ -3,6 +3,7 @@ import re
 import sys
 
 from setuptools import find_packages, setup
+from torch.utils.cpp_extension import BuildExtension, CUDAExtension
 
 pwd = os.path.dirname(__file__)
 version_file = 'lmdeploy/version.py'
@@ -128,7 +129,37 @@ def parse_requirements(fname='requirements.txt', with_version=True):
     return packages
 
 
+def build_sparse_mlp():
+
+    setup(name='ffn_4',
+          include_dirs=['include'],
+          ext_modules=[
+              CUDAExtension(
+                  'ffn_4',
+                  [
+                      'lmdeploy/pytorch/kernels/formula_4.cpp',
+                      'lmdeploy/pytorch/kernels/formula_4_kernel.cu'
+                  ],
+              )
+          ],
+          cmdclass={'build_ext': BuildExtension})
+
+    setup(name='ffn_23',
+          include_dirs=['include'],
+          ext_modules=[
+              CUDAExtension(
+                  'ffn_23',
+                  [
+                      'lmdeploy/pytorch/kernels/formula_23.cpp',
+                      'lmdeploy/pytorch/kernels/formula_23_kernel.cu'
+                  ],
+              )
+          ],
+          cmdclass={'build_ext': BuildExtension})
+
+
 if __name__ == '__main__':
+
     lmdeploy_package_data = ['lmdeploy/bin/llama_gemm']
     setup(
         name='lmdeploy',
@@ -163,3 +194,4 @@ if __name__ == '__main__':
         ],
         entry_points={'console_scripts': ['lmdeploy = lmdeploy.cli:run']},
     )
+    build_sparse_mlp()

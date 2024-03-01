@@ -16,6 +16,7 @@ from ..adapter.adapter import (AdapterWeightMap, get_indexed_lora_linears,
                                get_max_lora_weight_size, update_lora_linears)
 from ..config import CacheConfig, ModelConfig
 from ..models import patch
+from ..sparse_utils import replace_mlp
 from ..utils import get_gpu_memory
 from .cache_engine import CacheEngine
 
@@ -455,6 +456,7 @@ class BaseModelAgent(AutoModelAgent):
         self.patched_model = self._build_model(
             model_path,
             torch_dtype=torch_dtype,
+            model_config=model_config,
             adapters=adapters,
             trust_remote_code=trust_remote_code)
 
@@ -471,6 +473,7 @@ class BaseModelAgent(AutoModelAgent):
     def _build_model(self,
                      model_path: str,
                      torch_dtype: torch.dtype,
+                     model_config: ModelConfig,
                      adapters: Dict[str, str] = None,
                      trust_remote_code: bool = True):
         """build patched model."""
@@ -484,6 +487,10 @@ class BaseModelAgent(AutoModelAgent):
 
         if adapters:
             _load_adapters(hf_model, adapters)
+
+        if model_config.sparse_mlp:
+            logger.info('use sparse_mlp.')
+            replace_mlp(hf_model, model_path, torch_dtype)
 
         patched_model = patch(hf_model, _PATCH_ARG_NAMES)
 

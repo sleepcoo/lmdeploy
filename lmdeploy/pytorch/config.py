@@ -58,6 +58,7 @@ class ModelConfig:
     multi_query_attention: bool = False
     json_config: dict = field(default_factory=dict)
     hf_config: Any = None
+    sparse_mlp: bool = False
 
     def get_head_size(self):
         """get head size."""
@@ -134,6 +135,7 @@ class ModelConfig:
             num_key_value_heads = getattr(hf_config, 'num_key_value_heads',
                                           num_attention_heads)
             use_sliding_window = getattr(hf_config, 'use_sliding_window', True)
+            sparse_mlp = getattr(hf_config, 'sparse_mlp', False)
             sliding_window = -1
             if use_sliding_window:
                 sliding_window = getattr(hf_config, 'sliding_window',
@@ -146,7 +148,8 @@ class ModelConfig:
                 bos_token_id=hf_config.bos_token_id,
                 eos_token_id=hf_config.eos_token_id,
                 sliding_window=sliding_window,
-                head_dim=head_dim)
+                head_dim=head_dim,
+                sparse_mlp=sparse_mlp)
 
         if 'falcon' in model_path:
             model_config = __build_falcon()
