@@ -58,11 +58,12 @@ __global__ void ffn_fuse_23(__half *vec_sparse, __half *vec_input,
 
   __shared__ float warp_sum[32];
   warp_sum[threadIdx.y] = 0.0f;
-  atomicAdd(&warp_sum[threadIdx.y], sum);
-  __syncthreads();
+  for (int offset = 32 / 2; offset > 0; offset /= 2) {
+    sum += __shfl_down_sync(0xffffffff, sum, offset);
+  }
 
   if (threadIdx.x == 0) {
-    float sum = warp_sum[threadIdx.y];
+    float sum = sum;
     if (__half2float(vec_sparse_val) > threshold) {
       sum = sum * __half2float(vec_sparse_val);
     }
@@ -70,12 +71,13 @@ __global__ void ffn_fuse_23(__half *vec_sparse, __half *vec_input,
   }
 }
 
-void launch_ffn_fuse_23(__half *vec_sparse, __half *vec_input, __half *mat_up,
-                        __half *res, unsigned int mat_row, unsigned int mat_col,
+void launch_ffn_fuse_23(const cudaStream_t stream, __half *vec_sparse,
+                        __half *vec_input, __half *mat_up, __half *res,
+                        unsigned int mat_row, unsigned int mat_col,
                         float threshold) {
   dim3 grid_dim(1, mat_col / 32);
   dim3 block_dim(32, 32, 1);
 
-  ffn_fuse_23<<<grid_dim, block_dim>>>(vec_sparse, vec_input, mat_up, res,
-                                       mat_row, mat_col, threshold);
+  ffn_fuse_23<<<grid_dim, block_dim, 0, stream>>>(
+      vec_sparse, vec_input, mat_up, res, mat_row, mat_col, threshold);
 }

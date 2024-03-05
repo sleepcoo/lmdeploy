@@ -5,17 +5,10 @@
 
 #include <cstdint>
 
-#define ROW_OPT 11008
-#define COL_OPT 4096
 // Row Major
 // (32, 32, 1) (mat_row / 32)
 __global__ void ffn_4(__half *mat, __half *vec, __half *res,
                       unsigned int mat_row, unsigned int mat_col) {
-#ifdef USE_CONSTANT
-  mat_row = ROW_OPT;
-  mat_col = COL_OPT;
-#endif
-
   float sum = 0;
   // __half sum = __float2half(0.0f);
   __shared__ float warp_sum[32];
@@ -48,15 +41,10 @@ __global__ void ffn_4(__half *mat, __half *vec, __half *res,
   }
 }
 
-void launch_ffn_4(__half *mat, __half *vec, __half *res, unsigned int mat_row,
-                  unsigned int mat_col) {
-#ifdef USE_CONSTANT
-  mat_row = ROW_OPT;
-  mat_col = COL_OPT;
-#endif
-
+void launch_ffn_4(const cudaStream_t stream, __half *mat, __half *vec,
+                  __half *res, unsigned int mat_row, unsigned int mat_col) {
   dim3 grid_dim(1, mat_col / 32);
   dim3 block_dim(32, 32, 1);
 
-  ffn_4<<<grid_dim, block_dim>>>(mat, vec, res, mat_row, mat_col);
+  ffn_4<<<grid_dim, block_dim, 0, stream>>>(mat, vec, res, mat_row, mat_col);
 }

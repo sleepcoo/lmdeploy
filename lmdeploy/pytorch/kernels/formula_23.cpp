@@ -1,15 +1,19 @@
+#include <ATen/cuda/CUDAContext.h>
+#include <c10/cuda/CUDAGuard.h>
 #include <cuda_fp16.h>
+#include <cuda_runtime.h>
 #include <torch/extension.h>
-
-void launch_ffn_fuse_23(__half *vec_sparse, __half *vec_input, __half *mat_up,
-                        __half *res, unsigned int mat_row, unsigned int mat_col,
+void launch_ffn_fuse_23(cudaStream_t stream, __half *vec_sparse,
+                        __half *vec_input, __half *mat_up, __half *res,
+                        unsigned int mat_row, unsigned int mat_col,
                         float threshold = 0);
 
 void torch_launch_ffn_fuse_23(torch::Tensor &vec_sparse,
                               torch::Tensor &vec_input, torch::Tensor &mat_up,
                               torch::Tensor &res, int mat_row, int mat_col,
                               float threshold = 0.) {
-  launch_ffn_fuse_23((__half *)vec_sparse.data_ptr(),
+  const cudaStream_t stream = at::cuda::getCurrentCUDAStream();
+  launch_ffn_fuse_23(stream, (__half *)vec_sparse.data_ptr(),
                      (__half *)vec_input.data_ptr(),
                      (__half *)mat_up.data_ptr(), (__half *)res.data_ptr(),
                      mat_row, mat_col, threshold);

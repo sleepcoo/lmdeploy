@@ -18,7 +18,7 @@ if __name__ == '__main__':
     from transformers import AutoModelForCausalLM, AutoTokenizer
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-    model_path = 'Llama'
+    model_path = '/mnt/dolphinfs/hdd_pool/docker/user/hadoop-hmart-waimai-rank/wangchao/Llama-2-7b-hf'
     hf_model = AutoModelForCausalLM.from_pretrained(
         model_path, torch_dtype=torch.float16).to(device)
     tokenizer = AutoTokenizer.from_pretrained(model_path)

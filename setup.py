@@ -159,7 +159,7 @@ def build_sparse_mlp():
 
 
 if __name__ == '__main__':
-
+    '''
     lmdeploy_package_data = ['lmdeploy/bin/llama_gemm']
     setup(
         name='lmdeploy',
@@ -194,4 +194,5 @@ if __name__ == '__main__':
         ],
         entry_points={'console_scripts': ['lmdeploy = lmdeploy.cli:run']},
     )
+    '''
     build_sparse_mlp()

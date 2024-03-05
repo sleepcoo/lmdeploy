@@ -12,27 +12,6 @@ from transformers.models.llama.modeling_llama import LlamaMLP
 from lmdeploy.pytorch.weight_utils import hf_model_weights_iterator
 
 
-def mlp_sparse(idx,
-               x,
-               gate_weight,
-               up_weight,
-               down_weight,
-               threshold,
-               act_fn,
-               row=4096,
-               col=11008):
-    gate_res = torch.zeros(col, device='cuda:0', dtype=torch.float16)
-    up_res = torch.zeros(col, device='cuda:0', dtype=torch.float16)
-    out = torch.zeros(row, device='cuda:0', dtype=torch.float16)
-    ffn_23.torch_launch_ffn_fuse_23(idx, x, gate_weight, gate_res, 1, col,
-                                    threshold)
-    ffn_23.torch_launch_ffn_fuse_23(idx, x, up_weight, up_res, 1, col,
-                                    threshold)
-    ffn_4.torch_launch_ffn_4(down_weight,
-                             act_fn(gate_res) * up_res, out, 1, col)
-    return out
-
-
 def modify_string(original_string: str):
     modified_string = re.sub(r'_\d+', '', original_string)
     return 'sp.' + modified_string
@@ -77,10 +56,24 @@ class LlamaSparseMLP(LlamaMLP):
             if hasattr(llama_mlp, 'act_fn'):
                 self.act_fn = llama_mlp.act_fn
 
-            self._load_sp_weight(own_state, model_path, idx)
+            #self._load_sp_weight(own_state, model_path, idx)
             self.load_state_dict(own_state)
+            self.down_weight_t = self.down_proj.weight.t().contiguous()
+            self.down_weight_t = self.down_weight_t.to(
+                'cuda:0').half().t().contiguous()
             self.to(dtype=torch_dtype)
             self.threshold = 0
+
+            #test code
+            self.vec_sparse = torch.rand(self.intermediate_size,
+                                         device="cuda:0",
+                                         dtype=torch.float16)
+            self.vec_sparse = torch.relu(self.vec_sparse - 8 / 10)
+            print(
+                ">>> act_rate:",
+                round(
+                    torch.sum(self.vec_sparse > 0).item() * 100 /
+                    self.vec_sparse.numel(), 2))
 
     def _load_sp_weight(self, own_state, model_path, idx):
         sp_model_path = os.path.join(model_path, 'sparse_predictor')
@@ -89,13 +82,35 @@ class LlamaSparseMLP(LlamaMLP):
             if 'sp_fc' in name and int(cur_idx) == idx:
                 own_state[modify_string(name)].copy_(loaded_weight)
 
+    def mlp_sparse(self,
+                   idx,
+                   x,
+                   gate_weight,
+                   up_weight,
+                   down_weight,
+                   threshold,
+                   act_fn,
+                   row=4096,
+                   col=11008):
+        cuda_res = torch.empty(col + col + row,
+                               device='cuda:0',
+                               dtype=torch.float16)
+
+        ffn_23.torch_launch_ffn_fuse_23(idx, x, gate_weight, cuda_res[0:col],
+                                        row, col, threshold)
+        ffn_23.torch_launch_ffn_fuse_23(idx, x, up_weight,
+                                        cuda_res[col:col + col], row, col,
+                                        threshold)
+        self.down_proj(cuda_res[0:col] * cuda_res[col:col + col])
+        return cuda_res[col + col:].unsqueeze_(-2).unsqueeze_(-2)
+
     def sparse_mlp(self, x):
-        idx = self.sp(x)
-        out = mlp_sparse(idx, x.squeeze(), self.gate_proj.weight,
-                         self.up_proj.weight, self.down_proj.weight, 0,
-                         self.act_fn, self.hidden_size, self.intermediate_size)
-        x = rearrange(out, 'd -> 1 1 d')
-        return x
+        #idx = self.sp(x)
+        out = self.mlp_sparse(self.vec_sparse, x.squeeze_(),
+                              self.gate_proj.weight, self.up_proj.weight,
+                              self.down_weight_t, 0, self.act_fn,
+                              self.hidden_size, self.intermediate_size)
+        return out
 
     def forward(self, x):
         if x.size(1) == 1 and x.size(0) == 1:
